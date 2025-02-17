@@ -19,7 +19,8 @@ class clientes extends conexion
     private float $altura = 0.00;
     private $genero = "";
     private $actividad = "";
-    private $naf = 0.00;
+    private $naf = 0.0;
+    private $naf_texto = "";
     private $horas_ejercicio = 0.00;
     private $objetivo = "";
     private $alergia_lactosa = false;
@@ -126,7 +127,8 @@ class clientes extends conexion
             return $_respuestas->error_400("Actividad inválida.");
         }
 
-        $this->naf = $actividadValores[$this->actividad];
+        $this->naf = $actividadValores[$this->actividad]; // Valor numérico para cálculos
+        $this->naf_texto = array_search($this->naf, $actividadValores); // Valor en texto para la BD
 
         // Calcular el IMC
         $this->imc = $this->peso / ($this->altura * $this->altura);
@@ -254,34 +256,6 @@ class clientes extends conexion
             mkdir($carpeta_export, 0777, true);
         }
 
-        // Tabla de equivalencias NAF
-        $actividadValores = [
-            1.2 => "Sedentario",
-            1.375 => "Ligero",
-            1.55 => "Moderado",
-            1.725 => "Activo",
-            1.9 => "Muy Activo"
-        ];
-
-        // Función para encontrar el valor más cercano
-        function obtenerActividadNAF($naf, $actividadValores)
-        {
-            // Convertir el NAF a float
-            $naf = floatval($naf);
-
-            // Buscar el valor más cercano
-            $valores = array_keys($actividadValores);
-            $cercano = $valores[0];
-
-            foreach ($valores as $valor) {
-                if (abs($naf - $valor) < abs($naf - $cercano)) {
-                    $cercano = $valor;
-                }
-            }
-
-            return $actividadValores[$cercano] ?? "Desconocido";
-        }
-
         // Abrir el archivo CSV para sobrescribirlo
         $csvFile = fopen($archivo, 'w');
 
@@ -294,13 +268,10 @@ class clientes extends conexion
 
         // Escribir los datos
         foreach ($datos as $row) {
-            // Convertir valores de alergias y ciclo a 'Sí' o 'No'
+            // Convertir los valores de las alergias y el ciclo a 'Sí' o 'No'
             $row['alergia_lactosa'] = ($row['alergia_lactosa'] == 1) ? 'Sí' : 'No';
             $row['alergia_semillas'] = ($row['alergia_semillas'] == 1) ? 'Sí' : 'No';
             $row['primera_vez_ciclo'] = ($row['primera_vez_ciclo'] == 1) ? 'Sí' : 'No';
-
-            // Convertir NAF al valor más cercano de la tabla
-            $row['naf'] = obtenerActividadNAF($row['naf'], $actividadValores);
 
             // Convertir cada valor a UTF-8 para evitar caracteres extraños
             foreach ($row as $key => $value) {
@@ -351,7 +322,7 @@ class clientes extends conexion
     {
         $query = "INSERT INTO " . $this->table . " (nombre,fecha_nacimiento,telefono,horario_entrenamiento,productos_adquiridos,asesor,marca,consumo_vitaminas_suplementos_medicamentos,presentacion_producto,primera_vez_ciclo,peso,altura,genero,naf,horas_ejercicio,objetivo,alergia_lactosa,alergia_semillas,imc,peso_ideal,tmb,get_total,agua_litros,pdf_plan)
         values
-        ('" . $this->nombre . "','" . $this->fechaNacimiento . "','" . $this->telefono . "','" . $this->horario_entrenamiento . "','" . $this->productos_adquiridos . "','" . $this->asesor . "','" . $this->marca . "','" . $this->consumo_vitaminas_suplementos_medicamentos . "','" . $this->presentacion . "','" . $this->ciclo . "','" . $this->peso . "','" . $this->altura . "','" . $this->genero . "','" . $this->naf . "','" . $this->horas_ejercicio . "','" . $this->objetivo . "','" . $this->alergia_lactosa . "','" . $this->alergia_semillas . "','" . $this->imc . "','" . $this->peso_ideal . "','" . $this->tmb . "','" . $this->get_total . "','" . $this->agua_litros . "','" . $this->pdf_plan . "')";
+        ('" . $this->nombre . "','" . $this->fechaNacimiento . "','" . $this->telefono . "','" . $this->horario_entrenamiento . "','" . $this->productos_adquiridos . "','" . $this->asesor . "','" . $this->marca . "','" . $this->consumo_vitaminas_suplementos_medicamentos . "','" . $this->presentacion . "','" . $this->ciclo . "','" . $this->peso . "','" . $this->altura . "','" . $this->genero . "','" . $this->naf_texto . "','" . $this->horas_ejercicio . "','" . $this->objetivo . "','" . $this->alergia_lactosa . "','" . $this->alergia_semillas . "','" . $this->imc . "','" . $this->peso_ideal . "','" . $this->tmb . "','" . $this->get_total . "','" . $this->agua_litros . "','" . $this->pdf_plan . "')";
         $resp = parent::nonQueryId($query);
         if ($resp) {
             return $resp;
