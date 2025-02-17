@@ -254,14 +254,29 @@ class clientes extends conexion
             mkdir($carpeta_export, 0777, true);
         }
 
-        // Tabla de equivalencias NAF
+        // Tabla de equivalencias NAF (usaremos la comparación más cercana)
         $actividadValores = [
-            1.20 => "Sedentario",
-            1.38 => "Ligero",
+            1.2 => "Sedentario",
+            1.375 => "Ligero",
             1.55 => "Moderado",
-            1.73 => "Activo",
-            1.90 => "Muy Activo"
+            1.725 => "Activo",
+            1.9 => "Muy Activo"
         ];
+
+        // Función para encontrar el valor más cercano
+        function obtenerActividadNAF($naf, $actividadValores)
+        {
+            $valores = array_keys($actividadValores);
+            $cercano = $valores[0];
+
+            foreach ($valores as $valor) {
+                if (abs($naf - $valor) < abs($naf - $cercano)) {
+                    $cercano = $valor;
+                }
+            }
+
+            return $actividadValores[$cercano] ?? "Desconocido";
+        }
 
         // Abrir el archivo CSV para sobrescribirlo
         $csvFile = fopen($archivo, 'w');
@@ -280,8 +295,8 @@ class clientes extends conexion
             $row['alergia_semillas'] = ($row['alergia_semillas'] == 1) ? 'Sí' : 'No';
             $row['primera_vez_ciclo'] = ($row['primera_vez_ciclo'] == 1) ? 'Sí' : 'No';
 
-            // Convertir NAF a su equivalente en texto
-            $row['naf'] = $actividadValores[$row['naf']] ?? "Desconocido";
+            // Convertir NAF al valor más cercano de la tabla
+            $row['naf'] = obtenerActividadNAF(floatval($row['naf']), $actividadValores);
 
             // Convertir cada valor a UTF-8 para evitar caracteres extraños
             foreach ($row as $key => $value) {
