@@ -206,27 +206,32 @@ class clientes extends conexion
         $objetivo = strtolower($this->objetivo);
         $calorias = $this->get_total;
 
-        // 1️⃣ PRIMERO, BUSCAR ARCHIVO EXACTO (ej: eurolabvolumen2675.pdf)
-        $archivo_exacto = "{$marca}{$objetivo}{$calorias}.pdf";
+        // Si el objetivo es recomposición, buscar también en archivos con "definicion"
+        $objetivos_busqueda = [$objetivo];
+        if ($objetivo === "recomposicion") {
+            $objetivos_busqueda[] = "definicion";
+        }
 
         foreach ($carpetas as $carpeta) {
             $ruta_carpeta = $ruta_base . $carpeta;
-            if (is_dir($ruta_carpeta)) {
-                $archivos = scandir($ruta_carpeta);
+            if (!is_dir($ruta_carpeta)) {
+                continue;
+            }
+            $archivos = scandir($ruta_carpeta);
 
-                foreach ($archivos as $archivo) {
-                    if (strcasecmp($archivo, $archivo_exacto) === 0) {
-                        return "planes/$carpeta/$archivo";
-                    }
+            foreach ($objetivos_busqueda as $objetivo_actual) {
+                // 1️⃣ Buscar archivo exacto (ej: eurolabvolumen2675.pdf o eurolabdefinicion2675.pdf)
+                $archivo_exacto = "{$marca}{$objetivo_actual}{$calorias}.pdf";
+                if (in_array($archivo_exacto, $archivos, true)) {
+                    return "planes/$carpeta/$archivo_exacto";
                 }
 
-                // 2️⃣ SI NO ENCUENTRA, BUSCAR UN ARCHIVO CON RANGO DE KCAL (ej: eurolabvolumen2650-2700.pdf)
+                // 2️⃣ Buscar archivo en rango de calorías (ej: eurolabvolumen2650-2700.pdf)
                 foreach ($archivos as $archivo) {
-                    if (preg_match("/^{$marca}{$objetivo}(\d{4})-(\d{4})\.pdf$/i", $archivo, $matches)) {
+                    if (preg_match("/^{$marca}{$objetivo_actual}(\d{4})-(\d{4})\.pdf$/i", $archivo, $matches)) {
                         $kcal_min = intval($matches[1]);
                         $kcal_max = intval($matches[2]);
 
-                        // Verificar si las calorías están dentro del rango
                         if ($calorias >= $kcal_min && $calorias <= $kcal_max) {
                             return "planes/$carpeta/$archivo";
                         }
@@ -235,7 +240,7 @@ class clientes extends conexion
             }
         }
 
-        // 3️⃣ SI NO ENCUENTRA NINGÚN ARCHIVO
+        // 3️⃣ Si no encuentra ningún archivo
         return "archivo no encontrado";
     }
 
