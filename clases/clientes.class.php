@@ -254,7 +254,7 @@ class clientes extends conexion
             mkdir($carpeta_export, 0777, true);
         }
 
-        // Tabla de equivalencias NAF (usaremos la comparación más cercana)
+        // Tabla de equivalencias NAF
         $actividadValores = [
             1.2 => "Sedentario",
             1.375 => "Ligero",
@@ -266,6 +266,10 @@ class clientes extends conexion
         // Función para encontrar el valor más cercano
         function obtenerActividadNAF($naf, $actividadValores)
         {
+            // Convertir el NAF a float
+            $naf = floatval($naf);
+
+            // Buscar el valor más cercano
             $valores = array_keys($actividadValores);
             $cercano = $valores[0];
 
@@ -296,7 +300,7 @@ class clientes extends conexion
             $row['primera_vez_ciclo'] = ($row['primera_vez_ciclo'] == 1) ? 'Sí' : 'No';
 
             // Convertir NAF al valor más cercano de la tabla
-            $row['naf'] = obtenerActividadNAF(floatval($row['naf']), $actividadValores);
+            $row['naf'] = obtenerActividadNAF($row['naf'], $actividadValores);
 
             // Convertir cada valor a UTF-8 para evitar caracteres extraños
             foreach ($row as $key => $value) {
