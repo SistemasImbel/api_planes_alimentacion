@@ -237,6 +237,39 @@ class clientes extends conexion
         return "archivo no encontrado";
     }
 
+    public function exportarClientesCSV()
+    {
+        $query = "SELECT * FROM " . $this->table;
+        $datos = parent::obtenerDatos($query);
+
+        if (empty($datos)) {
+            return ["status" => "error", "message" => "No hay clientes disponibles."];
+        }
+
+        $archivo = __DIR__ . "/../export/clientes.csv";
+        $carpeta_export = __DIR__ . "/../export";
+
+        // Verificar si la carpeta export existe, si no, crearla
+        if (!is_dir($carpeta_export)) {
+            mkdir($carpeta_export, 0777, true);
+        }
+
+        // Crear el archivo CSV
+        $csvFile = fopen($archivo, 'w');
+
+        // Encabezados
+        fputcsv($csvFile, array_keys($datos[0]));
+
+        // Escribir los datos
+        foreach ($datos as $row) {
+            fputcsv($csvFile, $row);
+        }
+
+        fclose($csvFile);
+
+        return ["status" => "ok", "message" => "Archivo CSV generado exitosamente.", "archivo" => "export/clientes.csv"];
+    }
+
     public function mostrarPDF($id_cliente)
     {
         // Obtener la ruta del PDF desde la base de datos

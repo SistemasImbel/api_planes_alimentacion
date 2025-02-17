@@ -34,6 +34,11 @@ if ($_SERVER['REQUEST_METHOD'] == "GET") {
         // Nuevo endpoint para mostrar el PDF
         $id_cliente = intval($_GET['pdf']);
         $_clientes->mostrarPDF($id_cliente);
+    } elseif (isset($_GET['export']) && $_GET['export'] == "csv") {
+        $resultado = $_clientes->exportarClientesCSV();
+        header('Content-Type: application/json');
+        echo json_encode($resultado);
+        http_response_code(200);
     }
 } elseif ($_SERVER['REQUEST_METHOD'] == "POST") {
     //recibimos los datos enviados
