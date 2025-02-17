@@ -254,6 +254,15 @@ class clientes extends conexion
             mkdir($carpeta_export, 0777, true);
         }
 
+        // Tabla de equivalencias NAF
+        $actividadValores = [
+            1.2 => "Sedentario",
+            1.375 => "Ligero",
+            1.55 => "Moderado",
+            1.725 => "Activo",
+            1.9 => "Muy Activo"
+        ];
+
         // Abrir el archivo CSV para sobrescribirlo
         $csvFile = fopen($archivo, 'w');
 
@@ -266,10 +275,13 @@ class clientes extends conexion
 
         // Escribir los datos
         foreach ($datos as $row) {
-            // Convertir los valores de las alergias y el ciclo a 'Sí' o 'No'
+            // Convertir valores de alergias y ciclo a 'Sí' o 'No'
             $row['alergia_lactosa'] = ($row['alergia_lactosa'] == 1) ? 'Sí' : 'No';
             $row['alergia_semillas'] = ($row['alergia_semillas'] == 1) ? 'Sí' : 'No';
             $row['primera_vez_ciclo'] = ($row['primera_vez_ciclo'] == 1) ? 'Sí' : 'No';
+
+            // Convertir NAF a su equivalente en texto
+            $row['naf'] = $actividadValores[$row['naf']] ?? "Desconocido";
 
             // Convertir cada valor a UTF-8 para evitar caracteres extraños
             foreach ($row as $key => $value) {
