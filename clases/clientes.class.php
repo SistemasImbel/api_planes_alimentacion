@@ -254,14 +254,28 @@ class clientes extends conexion
             mkdir($carpeta_export, 0777, true);
         }
 
-        // Crear el archivo CSV
+        // Abrir el archivo CSV para sobrescribirlo
         $csvFile = fopen($archivo, 'w');
 
+        // Agregar BOM para evitar problemas de codificación en Excel
+        fprintf($csvFile, chr(0xEF) . chr(0xBB) . chr(0xBF));
+
         // Encabezados
-        fputcsv($csvFile, array_keys($datos[0]));
+        $encabezados = array_keys($datos[0]);
+        fputcsv($csvFile, $encabezados);
 
         // Escribir los datos
         foreach ($datos as $row) {
+            // Convertir los valores de las alergias y el ciclo a 'Sí' o 'No'
+            $row['alergia_lactosa'] = ($row['alergia_lactosa'] == 1) ? 'Sí' : 'No';
+            $row['alergia_semillas'] = ($row['alergia_semillas'] == 1) ? 'Sí' : 'No';
+            $row['primera_vez_ciclo'] = ($row['primera_vez_ciclo'] == 1) ? 'Sí' : 'No';
+
+            // Convertir cada valor a UTF-8 para evitar caracteres extraños
+            foreach ($row as $key => $value) {
+                $row[$key] = mb_convert_encoding($value, 'UTF-8', 'auto');
+            }
+
             fputcsv($csvFile, $row);
         }
 
