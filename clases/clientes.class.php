@@ -256,11 +256,11 @@ class clientes extends conexion
 
         // Tabla de equivalencias NAF
         $actividadValores = [
-            1.2 => "Sedentario",
-            1.375 => "Ligero",
+            1.20 => "Sedentario",
+            1.38 => "Ligero",
             1.55 => "Moderado",
-            1.725 => "Activo",
-            1.9 => "Muy Activo"
+            1.73 => "Activo",
+            1.90 => "Muy Activo"
         ];
 
         // Abrir el archivo CSV para sobrescribirlo
