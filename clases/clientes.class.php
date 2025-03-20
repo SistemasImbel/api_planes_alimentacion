@@ -334,46 +334,18 @@ class clientes extends conexion
 
     private function insertarCliente()
     {
-        $query = "INSERT INTO " . $this->table . " 
-            (nombre, fecha_nacimiento, telefono, horario_entrenamiento, productos_adquiridos, asesor, marca, 
-            consumo_vitaminas_suplementos_medicamentos, presentacion_producto, primera_vez_ciclo, peso, altura, 
-            genero, naf, horas_ejercicio, objetivo, alergia_lactosa, alergia_semillas, imc, peso_ideal, 
-            tmb, get_total, agua_litros, pdf_plan) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        // Determinar el valor correcto para 'primera_vez_ciclo'
+        $cicloValue = is_null($this->ciclo) ? 'NULL' : ($this->ciclo ? 1 : 0);
 
-        $stmt = $this->conexion->prepare($query);
-        $stmt->bind_param(
-            "ssssssssssiddssssddddddds",
-            $this->nombre,
-            $this->fechaNacimiento,
-            $this->telefono,
-            $this->horario_entrenamiento,
-            $this->productos_adquiridos,
-            $this->asesor,
-            $this->marca,
-            $this->consumo_vitaminas_suplementos_medicamentos,
-            $this->presentacion,
-            $this->ciclo,  // <- Este campo ahora puede ser NULL
-            $this->peso,
-            $this->altura,
-            $this->genero,
-            $this->naf_texto,
-            $this->horas_ejercicio,
-            $this->objetivo,
-            $this->alergia_lactosa,
-            $this->alergia_semillas,
-            $this->imc,
-            $this->peso_ideal,
-            $this->tmb,
-            $this->get_total,
-            $this->agua_litros,
-            $this->pdf_plan
-        );
+        $query = "INSERT INTO " . $this->table . " (nombre,fecha_nacimiento,telefono,horario_entrenamiento,productos_adquiridos,asesor,marca,consumo_vitaminas_suplementos_medicamentos,presentacion_producto,primera_vez_ciclo,peso,altura,genero,naf,horas_ejercicio,objetivo,alergia_lactosa,alergia_semillas,imc,peso_ideal,tmb,get_total,agua_litros,pdf_plan)
+    values
+    ('" . $this->nombre . "','" . $this->fechaNacimiento . "','" . $this->telefono . "','" . $this->horario_entrenamiento . "','" . $this->productos_adquiridos . "','" . $this->asesor . "','" . $this->marca . "','" . $this->consumo_vitaminas_suplementos_medicamentos . "','" . $this->presentacion . "', " . $cicloValue . " ,'" . $this->peso . "','" . $this->altura . "','" . $this->genero . "','" . $this->naf_texto . "','" . $this->horas_ejercicio . "','" . $this->objetivo . "','" . $this->alergia_lactosa . "','" . $this->alergia_semillas . "','" . $this->imc . "','" . $this->peso_ideal . "','" . $this->tmb . "','" . $this->get_total . "','" . $this->agua_litros . "','" . $this->pdf_plan . "')";
 
-        $stmt->execute();
-        $id = $stmt->insert_id;
-        $stmt->close();
-
-        return $id ? $id : 0;
+        $resp = parent::nonQueryId($query);
+        if ($resp) {
+            return $resp;
+        } else {
+            return 0;
+        }
     }
 }
