@@ -30,6 +30,10 @@ if ($_SERVER['REQUEST_METHOD'] == "GET") {
         header('Content-Type: application/json');
         echo json_encode($datosCliente);
         http_response_code(200);
+    } elseif (isset($_GET["count"]) && $_GET["count"] == "true") {
+        $total = $_clientes->contarClientes();
+        echo json_encode(["total" => $total]);
+        exit();
     } elseif (isset($_GET['pdf'])) {
         // Nuevo endpoint para mostrar el PDF
         $id_cliente = intval($_GET['pdf']);
