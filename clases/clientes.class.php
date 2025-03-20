@@ -34,8 +34,12 @@ class clientes extends conexion
 
     public function listaClientes($pagina = 1)
     {
-        $cantidad = 100; // 100 registros por página
-        $inicio = ($pagina - 1) * $cantidad; // Cálculo correcto del offset
+        $inicio  = 0;
+        $cantidad = 100;
+        if ($pagina > 1) {
+            $inicio = ($cantidad * ($pagina - 1)) + 1;
+            $cantidad = $cantidad * $pagina;
+        }
         $query = "SELECT id_cliente,nombre,fecha_nacimiento,telefono,horario_entrenamiento,productos_adquiridos,asesor,marca,consumo_vitaminas_suplementos_medicamentos,presentacion_producto,primera_vez_ciclo,peso,altura,genero,naf,horas_ejercicio,objetivo,alergia_lactosa,alergia_semillas,imc,peso_ideal,tmb,get_total,agua_litros,pdf_plan,created_at FROM " . $this->table . " limit $inicio,$cantidad";
         $datos = parent::obtenerDatos($query);
         return ($datos);
