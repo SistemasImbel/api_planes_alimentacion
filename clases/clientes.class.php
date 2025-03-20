@@ -183,6 +183,14 @@ class clientes extends conexion
         // Calcular consumo de agua
         $this->agua_litros = (($this->peso + 40) * 24 + ($this->peso * 6) * $this->horas_ejercicio) / 1000;
 
+        // Verificar si la actividad es diferente de "Sedentario" y si horas_ejercicio está presente
+        if ($this->actividad !== "Sedentario" && (!isset($datos['horas_ejercicio']) || !is_numeric($datos['horas_ejercicio']) || $datos['horas_ejercicio'] < 0)) {
+            return $_respuestas->error_400("Si la actividad no es 'Sedentario', debes enviar un valor válido para horas_ejercicio.");
+        }
+
+        // Si la actividad es diferente de "Sedentario", asignar las horas de entrenamiento
+        $this->horas_ejercicio = ($this->actividad !== "Sedentario") ? filter_var($datos['horas_ejercicio'], FILTER_VALIDATE_FLOAT) : 0.00;
+
         // Generar la ruta del PDF
         $this->pdf_plan = $this->buscarPDFPlan();
 
