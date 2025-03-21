@@ -219,7 +219,7 @@ class clientes extends conexion
     private function buscarPDFPlan()
     {
         $ruta_base = __DIR__ . "/../planes/";
-        $carpetas = ["BARBARIAN", "EUROLAB", "MESO10", "MESOFRANCE", "SBELLA", "VASSAL"];
+        $carpetas = ["BARBARIAN", "MESO10", "MESOFRANCE", "SBELLA", "VASSAL"];
         $marca = strtolower($this->marca);
         $objetivo = strtolower($this->objetivo);
         $calorias = $this->get_total;
