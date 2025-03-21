@@ -182,9 +182,12 @@ class clientes extends conexion
             $this->get_total = $entero;
         }
 
+        // al ver los planes de alimentacion considerar cambiar el arreglo
+
         $objetivos_alias = [
-            "bajar de peso", "aumento de gluteo" => "recomposicion",
-            "aumento de volumen" => "volumen"
+            "bajar de peso" => "recomposicion",
+            "aumento de volumen" => "volumen",
+            "aumento de gluteo"
         ];
         if (isset($objetivos_alias[$this->objetivo])) {
             $this->objetivo = $objetivos_alias[$this->objetivo];
