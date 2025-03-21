@@ -161,7 +161,8 @@ class clientes extends conexion
             "bajar de peso" => 0.8,    // -20%
             "recomposicion" => 0.9,    // -10%
             "definicion" => 0.8,       // -20%
-            "aumento de volumen" => 1.2 // +20%
+            "aumento de volumen" => 1.2, // +20%
+            "aumento de gluteo" => 0.8 // -20%
         ];
 
         if (!isset($ajustesObjetivo[$this->objetivo])) {
@@ -182,7 +183,7 @@ class clientes extends conexion
         }
 
         $objetivos_alias = [
-            "bajar de peso" => "recomposicion",
+            "bajar de peso", "aumento de gluteo" => "recomposicion",
             "aumento de volumen" => "volumen"
         ];
         if (isset($objetivos_alias[$this->objetivo])) {
