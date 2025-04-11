@@ -32,7 +32,7 @@ class clientes extends conexion
     private $agua_litros = 0.00;
     private $pdf_plan = "";
 
-    
+
     private const ACTIVIDAD_VALORES = [
         "Sedentario" => 1.2,
         "Ligero" => 1.375,
@@ -141,7 +141,7 @@ class clientes extends conexion
         $fecha_nac = new DateTime($this->fechaNacimiento);
         if ($fecha_nac > $fecha_actual) {
             return $_respuestas->error_400("La fecha de nacimiento no puede ser en el futuro.");
-        }       
+        }
         $edad = $fecha_actual->diff($fecha_nac)->y;
 
         if (!isset(self::ACTIVIDAD_VALORES[$this->actividad])) {
@@ -189,7 +189,7 @@ class clientes extends conexion
 
         $objetivos_alias = [
             "bajar de peso" => "bajar",
-            "recomposicion",
+            "recomposicion" => "recomposicion",
             "aumento de volumen" => "volumen",
             "aumento de gluteo" => "gluteo"
         ];
@@ -232,43 +232,48 @@ class clientes extends conexion
         $objetivo = strtolower($this->objetivo);
         $calorias = $this->get_total;
 
-        // Si el objetivo es recomposición, buscar también en archivos con "definicion"
         $objetivos_busqueda = [$objetivo];
         if ($objetivo === "recomposicion") {
             $objetivos_busqueda[] = "definicion";
         }
 
+        $coincidencias = [];
+
         foreach ($carpetas as $carpeta) {
             $ruta_carpeta = $ruta_base . $carpeta;
-            if (!is_dir($ruta_carpeta)) {
-                continue;
-            }
+            if (!is_dir($ruta_carpeta)) continue;
+
             $archivos = scandir($ruta_carpeta);
 
             foreach ($objetivos_busqueda as $objetivo_actual) {
-                // 1️⃣ Buscar archivo exacto (ej: eurolabvolumen2675.pdf o eurolabdefinicion2675.pdf)
-                $archivo_exacto = "{$marca}{$objetivo_actual}{$calorias}.pdf";
-                if (in_array($archivo_exacto, $archivos, true)) {
-                    return "planes/$carpeta/$archivo_exacto";
-                }
-
-                // 2️⃣ Buscar archivo en rango de calorías (ej: eurolabvolumen2650-2700.pdf)
                 foreach ($archivos as $archivo) {
-                    if (preg_match("/^{$marca}{$objetivo_actual}(\d{4})-(\d{4})\.pdf$/i", $archivo, $matches)) {
+                    // Buscar archivos que empiecen con marca + objetivo + calorías, y terminen en .pdf
+                    $pattern = "/^{$marca}{$objetivo_actual}{$calorias}(.*)?\.pdf$/i";
+                    if (preg_match($pattern, $archivo)) {
+                        $coincidencias[] = "planes/$carpeta/$archivo";
+                    }
+
+                    // Buscar archivos por rango de calorías
+                    if (preg_match("/^{$marca}{$objetivo_actual}(\d{4})-(\d{4})(.*)?\.pdf$/i", $archivo, $matches)) {
                         $kcal_min = intval($matches[1]);
                         $kcal_max = intval($matches[2]);
 
                         if ($calorias >= $kcal_min && $calorias <= $kcal_max) {
-                            return "planes/$carpeta/$archivo";
+                            $coincidencias[] = "planes/$carpeta/$archivo";
                         }
                     }
                 }
             }
         }
+
+        if (!empty($coincidencias)) {
+            return $coincidencias[array_rand($coincidencias)];
+        }
+
         error_log("PDF no encontrado para marca={$marca}, objetivo={$objetivo}, calorías={$calorias}");
-        // 3️⃣ Si no encuentra ningún archivo
         return "archivo no encontrado";
     }
+
 
     public function exportarClientesCSV()
     {
@@ -350,55 +355,54 @@ class clientes extends conexion
 
 
     private function insertarCliente()
-{
-    $query = "INSERT INTO " . $this->table . " (
+    {
+        $query = "INSERT INTO " . $this->table . " (
         nombre, fecha_nacimiento, telefono, horario_entrenamiento, productos_adquiridos,
         asesor, marca, consumo_vitaminas_suplementos_medicamentos, presentacion_producto,
         primera_vez_ciclo, peso, altura, genero, naf, horas_ejercicio, objetivo,
         alergia_lactosa, alergia_semillas, imc, peso_ideal, tmb, get_total, agua_litros, pdf_plan
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
-    $stmt = $this->conexion->prepare($query);
+        $stmt = $this->conexion->prepare($query);
 
-    if (!$stmt) {
-        return 0; // o log de error
+        if (!$stmt) {
+            return 0; // o log de error
+        }
+
+        $cicloValue = is_null($this->ciclo) ? null : ($this->ciclo ? 1 : 0);
+
+        $stmt->bind_param(
+            "sssssssssidddssdiiiddds",
+            $this->nombre,
+            $this->fechaNacimiento,
+            $this->telefono,
+            $this->horario_entrenamiento,
+            $this->productos_adquiridos,
+            $this->asesor,
+            $this->marca,
+            $this->consumo_vitaminas_suplementos_medicamentos,
+            $this->presentacion,
+            $cicloValue,
+            $this->peso,
+            $this->altura,
+            $this->genero,
+            $this->naf_texto,
+            $this->horas_ejercicio,
+            $this->objetivo,
+            $this->alergia_lactosa,
+            $this->alergia_semillas,
+            $this->imc,
+            $this->peso_ideal,
+            $this->tmb,
+            $this->get_total,
+            $this->agua_litros,
+            $this->pdf_plan
+        );
+
+        if ($stmt->execute()) {
+            return $stmt->insert_id;
+        }
+
+        return 0;
     }
-
-    $cicloValue = is_null($this->ciclo) ? null : ($this->ciclo ? 1 : 0);
-
-    $stmt->bind_param(
-        "sssssssssidddssdiiiddds",
-        $this->nombre,
-        $this->fechaNacimiento,
-        $this->telefono,
-        $this->horario_entrenamiento,
-        $this->productos_adquiridos,
-        $this->asesor,
-        $this->marca,
-        $this->consumo_vitaminas_suplementos_medicamentos,
-        $this->presentacion,
-        $cicloValue,
-        $this->peso,
-        $this->altura,
-        $this->genero,
-        $this->naf_texto,
-        $this->horas_ejercicio,
-        $this->objetivo,
-        $this->alergia_lactosa,
-        $this->alergia_semillas,
-        $this->imc,
-        $this->peso_ideal,
-        $this->tmb,
-        $this->get_total,
-        $this->agua_litros,
-        $this->pdf_plan
-    );
-
-    if ($stmt->execute()) {
-        return $stmt->insert_id;
-    }
-
-    return 0;
-}
-
 }
