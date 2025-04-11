@@ -32,6 +32,24 @@ class clientes extends conexion
     private $agua_litros = 0.00;
     private $pdf_plan = "";
 
+    
+    private const ACTIVIDAD_VALORES = [
+        "Sedentario" => 1.2,
+        "Ligero" => 1.375,
+        "Moderado" => 1.55,
+        "Activo" => 1.725,
+        "Muy Activo" => 1.9
+    ];
+
+    private const AJUSTES_OBJETIVO = [
+        "bajar de peso" => 0.8,
+        "recomposicion" => 0.9,
+        "definicion" => 0.8,
+        "aumento de volumen" => 1.2,
+        "aumento de gluteo" => 0.8
+    ];
+
+
     public function listaClientes($pagina = 1)
     {
         $inicio  = 0;
@@ -121,23 +139,17 @@ class clientes extends conexion
         // Calcular la edad
         $fecha_actual = new DateTime();
         $fecha_nac = new DateTime($this->fechaNacimiento);
+        if ($fecha_nac > $fecha_actual) {
+            return $_respuestas->error_400("La fecha de nacimiento no puede ser en el futuro.");
+        }       
         $edad = $fecha_actual->diff($fecha_nac)->y;
 
-        // Definir el valor de NAF según la actividad seleccionada
-        $actividadValores = [
-            "Sedentario" => 1.2,
-            "Ligero" => 1.375,
-            "Moderado" => 1.55,
-            "Activo" => 1.725,
-            "Muy Activo" => 1.9
-        ];
-
-        if (!isset($actividadValores[$this->actividad])) {
+        if (!isset(self::ACTIVIDAD_VALORES[$this->actividad])) {
             return $_respuestas->error_400("Actividad inválida.");
         }
 
-        $this->naf = $actividadValores[$this->actividad]; // Valor numérico para cálculos
-        $this->naf_texto = array_search($this->naf, $actividadValores); // Valor en texto para la BD
+        $this->naf = self::ACTIVIDAD_VALORES[$this->actividad]; // Valor numérico para cálculos
+        $this->naf_texto = $this->actividad; // Valor en texto para la BD
 
         // Calcular el IMC
         $this->imc = $this->peso / ($this->altura * $this->altura);
@@ -156,20 +168,11 @@ class clientes extends conexion
         // GET antes del ajuste por objetivo
         $this->get_total = $this->tmb * $this->naf;
 
-        // Ajuste del GET según el objetivo
-        $ajustesObjetivo = [
-            "bajar de peso" => 0.8,    // -20%
-            "recomposicion" => 0.9,    // -10%
-            "definicion" => 0.8,       // -20%
-            "aumento de volumen" => 1.2, // +20%
-            "aumento de gluteo" => 0.8 // -20%
-        ];
-
-        if (!isset($ajustesObjetivo[$this->objetivo])) {
+        if (!isset(self::AJUSTES_OBJETIVO[$this->objetivo])) {
             return $_respuestas->error_400("Objetivo inválido.");
         }
 
-        $this->get_total *= $ajustesObjetivo[$this->objetivo];
+        $this->get_total *= self::AJUSTES_OBJETIVO[$this->objetivo];
 
         // Extraer la parte entera y decimal
         $entero = floor($this->get_total / 100) * 100;
@@ -185,13 +188,18 @@ class clientes extends conexion
         // al ver los planes de alimentacion considerar cambiar el arreglo
 
         $objetivos_alias = [
-            "bajar de peso" => "recomposicion",
+            "bajar de peso" => "bajar",
+            "recomposicion",
             "aumento de volumen" => "volumen",
-            "aumento de gluteo"
+            "aumento de gluteo" => "gluteo"
         ];
+
         if (isset($objetivos_alias[$this->objetivo])) {
             $this->objetivo = $objetivos_alias[$this->objetivo];
         }
+
+        // Si la actividad es diferente de "Sedentario", asignar las horas de entrenamiento
+        $this->horas_ejercicio = ($this->actividad !== "Sedentario") ? filter_var($datos['horas_ejercicio'], FILTER_VALIDATE_FLOAT) : 0.00;
 
         // Calcular consumo de agua
         $this->agua_litros = (($this->peso + 40) * 24 + ($this->peso * 6) * $this->horas_ejercicio) / 1000;
@@ -200,9 +208,6 @@ class clientes extends conexion
         if ($this->actividad !== "Sedentario" && (!isset($datos['horas_ejercicio']) || !is_numeric($datos['horas_ejercicio']) || $datos['horas_ejercicio'] < 0)) {
             return $_respuestas->error_400("Si la actividad no es 'Sedentario', debes enviar un valor válido para horas_ejercicio.");
         }
-
-        // Si la actividad es diferente de "Sedentario", asignar las horas de entrenamiento
-        $this->horas_ejercicio = ($this->actividad !== "Sedentario") ? filter_var($datos['horas_ejercicio'], FILTER_VALIDATE_FLOAT) : 0.00;
 
         // Generar la ruta del PDF
         $this->pdf_plan = $this->buscarPDFPlan();
@@ -260,7 +265,7 @@ class clientes extends conexion
                 }
             }
         }
-
+        error_log("PDF no encontrado para marca={$marca}, objetivo={$objetivo}, calorías={$calorias}");
         // 3️⃣ Si no encuentra ningún archivo
         return "archivo no encontrado";
     }
@@ -345,19 +350,55 @@ class clientes extends conexion
 
 
     private function insertarCliente()
-    {
-        // Determinar el valor correcto para 'primera_vez_ciclo'
-        $cicloValue = is_null($this->ciclo) ? 'NULL' : ($this->ciclo ? 1 : 0);
+{
+    $query = "INSERT INTO " . $this->table . " (
+        nombre, fecha_nacimiento, telefono, horario_entrenamiento, productos_adquiridos,
+        asesor, marca, consumo_vitaminas_suplementos_medicamentos, presentacion_producto,
+        primera_vez_ciclo, peso, altura, genero, naf, horas_ejercicio, objetivo,
+        alergia_lactosa, alergia_semillas, imc, peso_ideal, tmb, get_total, agua_litros, pdf_plan
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
-        $query = "INSERT INTO " . $this->table . " (nombre,fecha_nacimiento,telefono,horario_entrenamiento,productos_adquiridos,asesor,marca,consumo_vitaminas_suplementos_medicamentos,presentacion_producto,primera_vez_ciclo,peso,altura,genero,naf,horas_ejercicio,objetivo,alergia_lactosa,alergia_semillas,imc,peso_ideal,tmb,get_total,agua_litros,pdf_plan)
-    values
-    ('" . $this->nombre . "','" . $this->fechaNacimiento . "','" . $this->telefono . "','" . $this->horario_entrenamiento . "','" . $this->productos_adquiridos . "','" . $this->asesor . "','" . $this->marca . "','" . $this->consumo_vitaminas_suplementos_medicamentos . "','" . $this->presentacion . "', " . $cicloValue . " ,'" . $this->peso . "','" . $this->altura . "','" . $this->genero . "','" . $this->naf_texto . "','" . $this->horas_ejercicio . "','" . $this->objetivo . "','" . $this->alergia_lactosa . "','" . $this->alergia_semillas . "','" . $this->imc . "','" . $this->peso_ideal . "','" . $this->tmb . "','" . $this->get_total . "','" . $this->agua_litros . "','" . $this->pdf_plan . "')";
+    $stmt = $this->conexion->prepare($query);
 
-        $resp = parent::nonQueryId($query);
-        if ($resp) {
-            return $resp;
-        } else {
-            return 0;
-        }
+    if (!$stmt) {
+        return 0; // o log de error
     }
+
+    $cicloValue = is_null($this->ciclo) ? null : ($this->ciclo ? 1 : 0);
+
+    $stmt->bind_param(
+        "sssssssssidddssdiiiddds",
+        $this->nombre,
+        $this->fechaNacimiento,
+        $this->telefono,
+        $this->horario_entrenamiento,
+        $this->productos_adquiridos,
+        $this->asesor,
+        $this->marca,
+        $this->consumo_vitaminas_suplementos_medicamentos,
+        $this->presentacion,
+        $cicloValue,
+        $this->peso,
+        $this->altura,
+        $this->genero,
+        $this->naf_texto,
+        $this->horas_ejercicio,
+        $this->objetivo,
+        $this->alergia_lactosa,
+        $this->alergia_semillas,
+        $this->imc,
+        $this->peso_ideal,
+        $this->tmb,
+        $this->get_total,
+        $this->agua_litros,
+        $this->pdf_plan
+    );
+
+    if ($stmt->execute()) {
+        return $stmt->insert_id;
+    }
+
+    return 0;
+}
+
 }
