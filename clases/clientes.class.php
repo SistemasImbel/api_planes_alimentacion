@@ -232,6 +232,9 @@ class clientes extends conexion
         $objetivo = strtolower($this->objetivo);
         $calorias = $this->get_total;
 
+        $sinLacteos = $this->alergia_lactosa;
+        $sinSemillas = $this->alergia_semillas;
+
         $objetivos_busqueda = [$objetivo];
         if ($objetivo === "recomposicion") {
             $objetivos_busqueda[] = "definicion";
@@ -247,30 +250,48 @@ class clientes extends conexion
 
             foreach ($objetivos_busqueda as $objetivo_actual) {
                 foreach ($archivos as $archivo) {
-                    // Buscar archivos que empiecen con marca + objetivo + calorías, y terminen en .pdf
-                    $pattern = "/^{$marca}{$objetivo_actual}{$calorias}(.*)?\.pdf$/i";
-                    if (preg_match($pattern, $archivo)) {
-                        $coincidencias[] = "planes/$carpeta/$archivo";
+                    $archivo_lower = strtolower($archivo);
+
+                    // 1️⃣ Buscar exactos con calorías
+                    if (preg_match("/^{$marca}{$objetivo_actual}{$calorias}(.*)?\.pdf$/i", $archivo)) {
+                        $coincidencias[] = [
+                            "ruta" => "planes/$carpeta/$archivo",
+                            "nombre" => $archivo_lower
+                        ];
                     }
 
-                    // Buscar archivos por rango de calorías
+                    // 2️⃣ Buscar por rango
                     if (preg_match("/^{$marca}{$objetivo_actual}(\d{4})-(\d{4})(.*)?\.pdf$/i", $archivo, $matches)) {
                         $kcal_min = intval($matches[1]);
                         $kcal_max = intval($matches[2]);
 
                         if ($calorias >= $kcal_min && $calorias <= $kcal_max) {
-                            $coincidencias[] = "planes/$carpeta/$archivo";
+                            $coincidencias[] = [
+                                "ruta" => "planes/$carpeta/$archivo",
+                                "nombre" => $archivo_lower
+                            ];
                         }
                     }
                 }
             }
         }
 
-        if (!empty($coincidencias)) {
-            return $coincidencias[array_rand($coincidencias)];
+        // 🧠 Filtrar por alergias
+        $filtrados = array_filter($coincidencias, function ($archivo) use ($sinLacteos, $sinSemillas) {
+            $nombre = $archivo["nombre"];
+            if ($sinLacteos && !str_contains($nombre, "sinlacteos")) return false;
+            if ($sinSemillas && !str_contains($nombre, "sinsemillas")) return false;
+            return true;
+        });
+
+        $lista_final = !empty($filtrados) ? $filtrados : $coincidencias;
+
+        if (!empty($lista_final)) {
+            $opcion = $lista_final[array_rand($lista_final)];
+            return $opcion["ruta"];
         }
 
-        error_log("PDF no encontrado para marca={$marca}, objetivo={$objetivo}, calorías={$calorias}");
+        error_log("PDF no encontrado para marca={$marca}, objetivo={$objetivo}, calorías={$calorias}, alergia_lactosa={$sinLacteos}, alergia_semillas={$sinSemillas}");
         return "archivo no encontrado";
     }
 
