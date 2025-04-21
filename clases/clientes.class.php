@@ -210,91 +210,106 @@ class clientes extends conexion
         }
 
         // Generar la ruta del PDF
-        $this->pdf_plan = $this->buscarPDFPlan();
-
+        $pdf_resultado = $this->buscarPDFPlan(
+            $this->marca,
+            $this->objetivo,
+            $this->get_total,
+            $this->alergia_lactosa,
+            $this->alergia_semillas
+        );
+        
+        $mensaje_adicional = null;
+        
+        if (str_starts_with($pdf_resultado, "No se encontró") || str_starts_with($pdf_resultado, "No se encontraron")) {
+            $this->pdf_plan = null;
+            $mensaje_adicional = $pdf_resultado;
+        } else {
+            $this->pdf_plan = $pdf_resultado;
+        }
+        
         // Insertar en la base de datos
         $resp = $this->insertarCliente();
         if ($resp) {
-            return [
+            $respuesta = [
                 "status" => "ok",
                 "result" => ["clienteId" => $resp]
             ];
+        
+            if ($mensaje_adicional !== null) {
+                $respuesta["mensaje"] = $mensaje_adicional;
+            }
+        
+            return $respuesta;
         } else {
             return $_respuestas->error_500();
-        }
+        }        
     }
 
-    private function buscarPDFPlan()
+    private function buscarPDFPlan($marca, $objetivo, $get_total, $alergia_lactosa, $alergia_semillas)
     {
-        $ruta_base = __DIR__ . "/../planes/";
-        $carpetas = ["BARBARIAN", "MESO10", "MESOFRANCE", "SBELLA", "VASSAL"];
-        $marca = strtolower($this->marca);
-        $objetivo = strtolower($this->objetivo);
-        $calorias = $this->get_total;
+        $basePath = "planes/";
+        $folderPath = $basePath . strtolower($marca);
 
-        $sinLacteos = $this->alergia_lactosa;
-        $sinSemillas = $this->alergia_semillas;
-
-        $objetivos_busqueda = [$objetivo];
-        if ($objetivo === "recomposicion") {
-            $objetivos_busqueda[] = "definicion";
-        }
-
-        $coincidencias = [];
-
-        foreach ($carpetas as $carpeta) {
-            $ruta_carpeta = $ruta_base . $carpeta;
-            if (!is_dir($ruta_carpeta)) continue;
-
-            $archivos = scandir($ruta_carpeta);
-
-            foreach ($objetivos_busqueda as $objetivo_actual) {
-                foreach ($archivos as $archivo) {
-                    $archivo_lower = strtolower($archivo);
-
-                    // 1️⃣ Buscar exactos con calorías
-                    if (preg_match("/^{$marca}{$objetivo_actual}{$calorias}(.*)?\.pdf$/i", $archivo)) {
-                        $coincidencias[] = [
-                            "ruta" => "planes/$carpeta/$archivo",
-                            "nombre" => $archivo_lower
-                        ];
-                    }
-
-                    // 2️⃣ Buscar por rango
-                    if (preg_match("/^{$marca}{$objetivo_actual}(\d{4})-(\d{4})(.*)?\.pdf$/i", $archivo, $matches)) {
-                        $kcal_min = intval($matches[1]);
-                        $kcal_max = intval($matches[2]);
-
-                        if ($calorias >= $kcal_min && $calorias <= $kcal_max) {
-                            $coincidencias[] = [
-                                "ruta" => "planes/$carpeta/$archivo",
-                                "nombre" => $archivo_lower
-                            ];
-                        }
-                    }
+        // Paso 1: Obtener calorías disponibles dinámicamente desde carpetas
+        $calorias_disponibles = [];
+        if (is_dir($folderPath)) {
+            $folders = scandir($folderPath);
+            foreach ($folders as $folder) {
+                $folder_lower = strtolower($folder);
+                if (preg_match("/" . strtolower($marca) . strtolower($objetivo) . "(\d{3,4})/", $folder_lower, $matches)) {
+                    $calorias_disponibles[] = intval($matches[1]);
                 }
             }
         }
 
-        // 🧠 Filtrar por alergias
-        $filtrados = array_filter($coincidencias, function ($archivo) use ($sinLacteos, $sinSemillas) {
-            $nombre = $archivo["nombre"];
-            if ($sinLacteos && !str_contains($nombre, "sinlacteos")) return false;
-            if ($sinSemillas && !str_contains($nombre, "sinsemillas")) return false;
-            return true;
-        });
-
-        $lista_final = !empty($filtrados) ? $filtrados : $coincidencias;
-
-        if (!empty($lista_final)) {
-            $opcion = $lista_final[array_rand($lista_final)];
-            return $opcion["ruta"];
+        // Si no hay calorías detectadas, no hay planes disponibles
+        if (empty($calorias_disponibles)) {
+            return "No se encontraron planes disponibles para la marca y objetivo especificados.";
         }
 
-        error_log("PDF no encontrado para marca={$marca}, objetivo={$objetivo}, calorías={$calorias}, alergia_lactosa={$sinLacteos}, alergia_semillas={$sinSemillas}");
-        return "archivo no encontrado";
-    }
+        // Paso 2: Ordenar y limpiar calorías
+        $calorias_disponibles = array_unique($calorias_disponibles);
+        sort($calorias_disponibles);
 
+        // Paso 3: Elegir la caloría más adecuada
+        $calorias_asignadas = $calorias_disponibles[0];
+        foreach ($calorias_disponibles as $cal) {
+            if ($get_total <= $cal) {
+                $calorias_asignadas = $cal;
+                break;
+            }
+        }
+        if ($get_total > max($calorias_disponibles)) {
+            $calorias_asignadas = max($calorias_disponibles);
+        }
+
+        // Paso 4: Construir rutas en orden de prioridad
+        $ruta_base = $basePath . strtolower($marca) . strtolower($objetivo) . $calorias_asignadas;
+        $rutas_posibles = [];
+
+        if ($alergia_lactosa) {
+            $rutas_posibles[] = $ruta_base . "sinlacteos";
+        }
+        if ($alergia_semillas) {
+            $rutas_posibles[] = $ruta_base . "sinsemillas";
+        }
+        $rutas_posibles[] = $ruta_base;
+
+        // Paso 5: Buscar PDFs en rutas
+        foreach ($rutas_posibles as $ruta) {
+            if (is_dir($ruta)) {
+                $archivos = array_values(array_filter(scandir($ruta), function ($file) {
+                    return !in_array($file, ['.', '..']) && pathinfo($file, PATHINFO_EXTENSION) === 'pdf';
+                }));
+                if (!empty($archivos)) {
+                    return $ruta . "/" . $archivos[array_rand($archivos)];
+                }
+            }
+        }
+
+        // Si llega aquí, no hay PDFs
+        return "No se encontró ningún plan PDF compatible con las restricciones y calorías calculadas.";
+    }
 
     public function exportarClientesCSV()
     {
