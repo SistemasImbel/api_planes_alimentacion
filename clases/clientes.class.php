@@ -217,16 +217,16 @@ class clientes extends conexion
             $this->alergia_lactosa,
             $this->alergia_semillas
         );
-        
+
         $mensaje_adicional = null;
-        
+
         if (str_starts_with($pdf_resultado, "No se encontró") || str_starts_with($pdf_resultado, "No se encontraron")) {
             $this->pdf_plan = null;
             $mensaje_adicional = $pdf_resultado;
         } else {
             $this->pdf_plan = $pdf_resultado;
         }
-        
+
         // Insertar en la base de datos
         $resp = $this->insertarCliente();
         if ($resp) {
@@ -234,82 +234,86 @@ class clientes extends conexion
                 "status" => "ok",
                 "result" => ["clienteId" => $resp]
             ];
-        
+
             if ($mensaje_adicional !== null) {
                 $respuesta["mensaje"] = $mensaje_adicional;
             }
-        
+
             return $respuesta;
         } else {
             return $_respuestas->error_500();
-        }        
+        }
     }
 
     private function buscarPDFPlan($marca, $objetivo, $get_total, $alergia_lactosa, $alergia_semillas)
     {
         $basePath = "planes/";
-        $folderPath = $basePath . strtolower($marca);
+        $folderPath = $basePath . strtoupper($marca); // Carpeta con el nombre de la marca en mayúsculas
 
-        // Paso 1: Obtener calorías disponibles dinámicamente desde carpetas
-        $calorias_disponibles = [];
-        if (is_dir($folderPath)) {
-            $folders = scandir($folderPath);
-            foreach ($folders as $folder) {
-                $folder_lower = strtolower($folder);
-                if (preg_match("/" . strtolower($marca) . strtolower($objetivo) . "(\d{3,4})/", $folder_lower, $matches)) {
-                    $calorias_disponibles[] = intval($matches[1]);
+        // Verificar que la carpeta exista
+        if (!is_dir($folderPath)) {
+            return "No se encontró la carpeta de planes para la marca '$marca'.";
+        }
+
+        // Leer los archivos dentro de la carpeta
+        $archivos = scandir($folderPath);
+        if (!$archivos) {
+            return "No se pudieron leer los archivos de la carpeta '$folderPath'.";
+        }
+
+        // Buscar archivos que coincidan con la marca + objetivo
+        $patron = strtolower($marca) . strtolower($objetivo); // ej: mesofrancebajar
+        $candidatos = [];
+
+        foreach ($archivos as $archivo) {
+            if (
+                pathinfo($archivo, PATHINFO_EXTENSION) === 'pdf' &&
+                str_starts_with(strtolower($archivo), $patron)
+            ) {
+
+                if (preg_match('/(\d{3,4})/', $archivo, $match)) {
+                    $calorias = intval($match[1]);
+                    $candidatos[] = [
+                        'archivo' => $archivo,
+                        'calorias' => $calorias
+                    ];
                 }
             }
         }
 
-        // Si no hay calorías detectadas, no hay planes disponibles
-        if (empty($calorias_disponibles)) {
+        if (empty($candidatos)) {
             return "No se encontraron planes disponibles para la marca y objetivo especificados.";
         }
 
-        // Paso 2: Ordenar y limpiar calorías
-        $calorias_disponibles = array_unique($calorias_disponibles);
-        sort($calorias_disponibles);
+        // Ordenar por calorías ascendente
+        usort($candidatos, fn($a, $b) => $a['calorias'] <=> $b['calorias']);
 
-        // Paso 3: Elegir la caloría más adecuada
-        $calorias_asignadas = $calorias_disponibles[0];
-        foreach ($calorias_disponibles as $cal) {
-            if ($get_total <= $cal) {
-                $calorias_asignadas = $cal;
+        // Elegir el plan más cercano sin pasarse (o el mayor disponible)
+        $seleccionado = $candidatos[0];
+        foreach ($candidatos as $cand) {
+            if ($get_total <= $cand['calorias']) {
+                $seleccionado = $cand;
                 break;
             }
         }
-        if ($get_total > max($calorias_disponibles)) {
-            $calorias_asignadas = max($calorias_disponibles);
-        }
 
-        // Paso 4: Construir rutas en orden de prioridad
-        $ruta_base = $basePath . strtolower($marca) . strtolower($objetivo) . $calorias_asignadas;
-        $rutas_posibles = [];
+        // Construir posibles nombres de archivo según alergias
+        $posibles_archivos = [];
+        if ($alergia_lactosa) $posibles_archivos[] = $patron . $seleccionado['calorias'] . "sinlacteos.pdf";
+        if ($alergia_semillas) $posibles_archivos[] = $patron . $seleccionado['calorias'] . "sinsemillas.pdf";
+        $posibles_archivos[] = $patron . $seleccionado['calorias'] . ".pdf";
 
-        if ($alergia_lactosa) {
-            $rutas_posibles[] = $ruta_base . "sinlacteos";
-        }
-        if ($alergia_semillas) {
-            $rutas_posibles[] = $ruta_base . "sinsemillas";
-        }
-        $rutas_posibles[] = $ruta_base;
-
-        // Paso 5: Buscar PDFs en rutas
-        foreach ($rutas_posibles as $ruta) {
-            if (is_dir($ruta)) {
-                $archivos = array_values(array_filter(scandir($ruta), function ($file) {
-                    return !in_array($file, ['.', '..']) && pathinfo($file, PATHINFO_EXTENSION) === 'pdf';
-                }));
-                if (!empty($archivos)) {
-                    return $ruta . "/" . $archivos[array_rand($archivos)];
-                }
+        // Buscar archivo que exista
+        foreach ($posibles_archivos as $archivo) {
+            $ruta = $folderPath . "/" . $archivo;
+            if (file_exists($ruta)) {
+                return $ruta;
             }
         }
 
-        // Si llega aquí, no hay PDFs
         return "No se encontró ningún plan PDF compatible con las restricciones y calorías calculadas.";
     }
+
 
     public function exportarClientesCSV()
     {
@@ -408,7 +412,7 @@ class clientes extends conexion
         $cicloValue = is_null($this->ciclo) ? null : ($this->ciclo ? 1 : 0);
 
         $stmt->bind_param(
-            "sssssssssidddssdiiiddds",
+            "sssssssssisdsssssiidddds",
             $this->nombre,
             $this->fechaNacimiento,
             $this->telefono,
