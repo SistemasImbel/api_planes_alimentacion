@@ -189,6 +189,7 @@ class clientes extends conexion
 
         $objetivos_alias = [
             "bajar de peso" => "bajar",
+            "defincion" => "definicion",
             "recomposicion" => "recomposicion",
             "aumento de volumen" => "volumen",
             "aumento de gluteo" => "gluteo"
@@ -248,36 +249,41 @@ class clientes extends conexion
     private function buscarPDFPlan($marca, $objetivo, $get_total, $alergia_lactosa, $alergia_semillas)
     {
         $basePath = "planes/";
-        $folderPath = $basePath . strtoupper($marca); // Carpeta con el nombre de la marca en mayúsculas
+        $folderPath = $basePath . strtoupper($marca);
 
-        // Verificar que la carpeta exista
         if (!is_dir($folderPath)) {
             return "No se encontró la carpeta de planes para la marca '$marca'.";
         }
 
-        // Leer los archivos dentro de la carpeta
         $archivos = scandir($folderPath);
         if (!$archivos) {
             return "No se pudieron leer los archivos de la carpeta '$folderPath'.";
         }
 
-        // Buscar archivos que coincidan con la marca + objetivo
-        $patron = strtolower($marca) . strtolower($objetivo); // ej: mesofrancebajar
+        $marca_lower = strtolower($marca);
+        $objetivo_lower = strtolower($objetivo);
         $candidatos = [];
 
+        // Recolectar candidatos que coincidan con marca y objetivo
         foreach ($archivos as $archivo) {
-            if (
-                pathinfo($archivo, PATHINFO_EXTENSION) === 'pdf' &&
-                str_starts_with(strtolower($archivo), $patron)
-            ) {
+            if (pathinfo($archivo, PATHINFO_EXTENSION) !== 'pdf') continue;
 
-                if (preg_match('/(\d{3,4})/', $archivo, $match)) {
-                    $calorias = intval($match[1]);
-                    $candidatos[] = [
-                        'archivo' => $archivo,
-                        'calorias' => $calorias
-                    ];
-                }
+            $archivo_lower = strtolower($archivo);
+
+            if (strpos($archivo_lower, $marca_lower) === false) continue;
+
+            $objetivos_posibles = explode('-', $this->objetivo); // En caso de que en el futuro vengan múltiples
+            if (!preg_match("/(" . implode('|', array_map('preg_quote', $objetivos_posibles)) . ")/", $archivo_lower)) {
+                continue;
+            }
+
+
+            if (preg_match('/(\d{3,4})/', $archivo_lower, $match)) {
+                $calorias = (int)$match[1];
+                $candidatos[] = [
+                    'archivo' => $archivo,
+                    'calorias' => $calorias
+                ];
             }
         }
 
@@ -288,24 +294,59 @@ class clientes extends conexion
         // Ordenar por calorías ascendente
         usort($candidatos, fn($a, $b) => $a['calorias'] <=> $b['calorias']);
 
-        // Elegir el plan más cercano sin pasarse (o el mayor disponible)
-        $seleccionado = $candidatos[0];
-        foreach ($candidatos as $cand) {
-            if ($get_total <= $cand['calorias']) {
-                $seleccionado = $cand;
+        // Buscar primer archivo que cumpla el mínimo de calorías
+        $seleccionado = null;
+        foreach ($candidatos as $c) {
+            if ($c['calorias'] >= $get_total) {
+                $seleccionado = $c;
                 break;
             }
         }
 
-        // Construir posibles nombres de archivo según alergias
-        $posibles_archivos = [];
-        if ($alergia_lactosa) $posibles_archivos[] = $patron . $seleccionado['calorias'] . "sinlacteos.pdf";
-        if ($alergia_semillas) $posibles_archivos[] = $patron . $seleccionado['calorias'] . "sinsemillas.pdf";
-        $posibles_archivos[] = $patron . $seleccionado['calorias'] . ".pdf";
+        // Si no hay suficiente, usar el de mayor caloría disponible
+        if (!$seleccionado) {
+            $seleccionado = end($candidatos);
+        }
 
-        // Buscar archivo que exista
-        foreach ($posibles_archivos as $archivo) {
-            $ruta = $folderPath . "/" . $archivo;
+        $archivo_base = pathinfo($seleccionado['archivo'], PATHINFO_FILENAME); // sin .pdf
+        $calorias = $seleccionado['calorias'];
+
+        // Separar nombre sin versión
+        $version = '';
+        if (preg_match('/v\d+$/', $archivo_base, $ver)) {
+            $version = $ver[0];
+            $archivo_base = preg_replace('/v\d+$/', '', $archivo_base);
+        }
+
+        // Separar base sin calorías
+        $base_sin_calorias = preg_replace('/\d{3,4}$/', '', $archivo_base);
+
+        // Construir posibles variantes en orden de prioridad
+        $pdf_variantes = [];
+
+        if ($alergia_lactosa && $alergia_semillas) {
+            $pdf_variantes[] = "{$base_sin_calorias}{$calorias}sinlacteosinsemillas{$version}.pdf";
+        }
+        if ($alergia_lactosa) {
+            $pdf_variantes[] = "{$base_sin_calorias}{$calorias}sinlacteos{$version}.pdf";
+        }
+        if ($alergia_semillas) {
+            $pdf_variantes[] = "{$base_sin_calorias}{$calorias}sinsemillas{$version}.pdf";
+        }
+
+        // Variante sin alergias
+        $pdf_variantes[] = "{$base_sin_calorias}{$calorias}{$version}.pdf";
+
+        // También probar sin versión si existe
+        if ($version !== '') {
+            foreach ($pdf_variantes as $v) {
+                $pdf_variantes[] = str_replace($version, '', $v);
+            }
+        }
+
+        // Buscar archivo que exista físicamente
+        foreach ($pdf_variantes as $nombre_pdf) {
+            $ruta = $folderPath . "/" . $nombre_pdf;
             if (file_exists($ruta)) {
                 return $ruta;
             }
@@ -313,6 +354,7 @@ class clientes extends conexion
 
         return "No se encontró ningún plan PDF compatible con las restricciones y calorías calculadas.";
     }
+
 
 
     public function exportarClientesCSV()
